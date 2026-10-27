@@ -114,57 +114,70 @@ public struct MenuBarContentView: View {
 
     @ViewBuilder
     private var statusBadge: some View {
-        switch manager.status {
-        case .idle:
-            Text("Ready")
-                .font(.caption2.weight(.semibold))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color.secondary.opacity(0.2))
-                .cornerRadius(4)
-        case .recording:
+        if manager.isTranscribing {
             HStack(spacing: 4) {
-                Circle().fill(Color.red).frame(width: 6, height: 6)
-                Text("REC")
+                ProgressView().controlSize(.mini)
+                Text("TRANSCRIBING...")
                     .font(.caption2.weight(.bold))
-                    .foregroundColor(.red)
+                    .foregroundColor(.purple)
             }
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Color.red.opacity(0.15))
+            .background(Color.purple.opacity(0.15))
             .cornerRadius(4)
-        case .paused:
-            Text("PAUSED")
-                .font(.caption2.weight(.bold))
-                .foregroundColor(.orange)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color.orange.opacity(0.15))
-                .cornerRadius(4)
-        case .recovering:
-            Text("RECOVERING...")
-                .font(.caption2.weight(.bold))
-                .foregroundColor(.yellow)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color.yellow.opacity(0.15))
-                .cornerRadius(4)
-        case .stopping:
-            Text("SAVING...")
-                .font(.caption2.weight(.semibold))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color.secondary.opacity(0.2))
-                .cornerRadius(4)
-        case .error(let msg):
-            Text("Error")
-                .font(.caption2.weight(.bold))
-                .foregroundColor(.red)
-                .help(msg)
+        } else {
+            switch manager.status {
+            case .idle:
+                Text("Ready")
+                    .font(.caption2.weight(.semibold))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.secondary.opacity(0.2))
+                    .cornerRadius(4)
+            case .recording:
+                HStack(spacing: 4) {
+                    Circle().fill(Color.red).frame(width: 6, height: 6)
+                    Text("REC")
+                        .font(.caption2.weight(.bold))
+                        .foregroundColor(.red)
+                }
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(Color.red.opacity(0.15))
                 .cornerRadius(4)
+            case .paused:
+                Text("PAUSED")
+                    .font(.caption2.weight(.bold))
+                    .foregroundColor(.orange)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.orange.opacity(0.15))
+                    .cornerRadius(4)
+            case .recovering:
+                Text("RECOVERING...")
+                    .font(.caption2.weight(.bold))
+                    .foregroundColor(.yellow)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.yellow.opacity(0.15))
+                    .cornerRadius(4)
+            case .stopping:
+                Text("SAVING...")
+                    .font(.caption2.weight(.semibold))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.secondary.opacity(0.2))
+                    .cornerRadius(4)
+            case .error(let msg):
+                Text("Error")
+                    .font(.caption2.weight(.bold))
+                    .foregroundColor(.red)
+                    .help(msg)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.red.opacity(0.15))
+                    .cornerRadius(4)
+            }
         }
     }
 

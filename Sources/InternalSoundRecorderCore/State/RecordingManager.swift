@@ -26,10 +26,12 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
     @Published public private(set) var recentRecordings: [RecordingItem] = []
     @Published public private(set) var activeMarkers: [MarkerItem] = []
     @Published public private(set) var lastDroppedMarker: MarkerItem?
+    @Published public private(set) var isTranscribing: Bool = false
     @Published public var settings: RecordingSettings = .default
 
     public let permissionManager = PermissionManager()
     public let meetingDetector = MeetingDetector()
+    public let transcriptionService = SpeechTranscriptionService()
 
     private let captureService = AudioCaptureService()
     private let levelMeter = AudioLevelMeter()
@@ -211,6 +213,21 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
 
         // Export Companion Markers File if markers were dropped
         exportMarkersIfPresent(for: finalURL)
+
+        // Trigger On-Device AI Transcription if enabled
+        if settings.autoTranscribe {
+            self.isTranscribing = true
+            let capturedMarkers = self.activeMarkers
+            let service = self.transcriptionService
+            Task {
+                if let result = try? await service.transcribe(audioURL: finalURL) {
+                    _ = try? service.exportCompanionArtifacts(for: finalURL, result: result, markers: capturedMarkers)
+                }
+                await MainActor.run { [weak self] in
+                    self?.isTranscribing = false
+                }
+            }
+        }
 
         let duration = recordedDuration
         let fileSize = writer.currentFileSize

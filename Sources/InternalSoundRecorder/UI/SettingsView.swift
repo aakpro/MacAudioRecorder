@@ -38,6 +38,19 @@ public struct SettingsView: View {
 
             Divider()
 
+            // On-Device Transcription
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle("Generate Meeting Notes & Transcript (On-Device AI)", isOn: $manager.settings.autoTranscribe)
+                    .font(.subheadline.bold())
+
+                Text("Uses Apple's Neural Engine to privately transcribe meetings into text (.txt), subtitles (.srt), and structured Markdown notes (.md) right on your Mac.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+
             // Capture Scope & App Filtering
             VStack(alignment: .leading, spacing: 6) {
                 Text("Capture Scope")

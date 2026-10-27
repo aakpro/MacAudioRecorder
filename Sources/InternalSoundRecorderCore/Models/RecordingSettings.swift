@@ -81,6 +81,7 @@ public struct RecordingSettings: Codable, Sendable {
     public var stemMode: StemRecordingMode
     public var targetMode: CaptureTargetMode
     public var targetAppBundleIDs: [String]
+    public var autoTranscribe: Bool
 
     public init(
         saveDirectory: URL? = nil,
@@ -94,7 +95,8 @@ public struct RecordingSettings: Codable, Sendable {
         microphoneVolume: Float = 1.0,
         stemMode: StemRecordingMode = .mixedOnly,
         targetMode: CaptureTargetMode = .allSystem,
-        targetAppBundleIDs: [String] = []
+        targetAppBundleIDs: [String] = [],
+        autoTranscribe: Bool = true
     ) {
         if let saveDirectory = saveDirectory {
             self.saveDirectory = saveDirectory
@@ -114,6 +116,7 @@ public struct RecordingSettings: Codable, Sendable {
         self.stemMode = stemMode
         self.targetMode = targetMode
         self.targetAppBundleIDs = targetAppBundleIDs
+        self.autoTranscribe = autoTranscribe
     }
 
     public static let `default` = RecordingSettings()
