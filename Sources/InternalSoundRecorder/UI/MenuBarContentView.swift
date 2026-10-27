@@ -16,6 +16,22 @@ public struct MenuBarContentView: View {
             // Header
             headerView
 
+            // Meeting App Detection Notice
+            if let meetingApp = manager.meetingDetector.detectedMeetingApp, manager.status == .idle {
+                HStack(spacing: 6) {
+                    Image(systemName: "video.fill")
+                        .font(.caption2)
+                        .foregroundColor(.green)
+                    Text("\(meetingApp) active — ready to record")
+                        .font(.caption2.weight(.medium))
+                        .foregroundColor(.primary)
+                    Spacer()
+                }
+                .padding(6)
+                .background(Color.green.opacity(0.12))
+                .cornerRadius(6)
+            }
+
             // Permission Warning if missing
             if !manager.permissionManager.hasScreenCapturePermission {
                 PermissionBannerView(permissionManager: manager.permissionManager)

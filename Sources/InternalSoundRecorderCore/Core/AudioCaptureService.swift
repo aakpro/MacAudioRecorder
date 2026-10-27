@@ -44,6 +44,7 @@ public final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelega
         includeMicrophone: Bool = true,
         systemVolume: Float = 1.0,
         microphoneVolume: Float = 1.0,
+        targetAppBundleIDs: [String] = [],
         onAudioSample: @escaping @Sendable (CMSampleBuffer) -> Void,
         onSystemSample: (@Sendable (CMSampleBuffer) -> Void)? = nil,
         onMicSample: (@Sendable (CMSampleBuffer) -> Void)? = nil
@@ -61,7 +62,7 @@ public final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelega
         audioMixer.reset()
         audioMixer.setVolumes(system: systemVolume, mic: microphoneVolume)
 
-        // 1. Fetch available displays via SCShareableContent
+        // 1. Fetch available displays and running applications via SCShareableContent
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         guard let display = content.displays.first else {
             throw NSError(
@@ -71,8 +72,18 @@ public final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelega
             )
         }
 
-        // 2. Configure content filter (captures system output, excludes nothing except our own app)
-        let filter = SCContentFilter(display: display, excludingWindows: [])
+        // 2. Configure content filter (targeted to specific apps or whole system)
+        let filter: SCContentFilter
+        if !targetAppBundleIDs.isEmpty {
+            let matchingApps = content.applications.filter { targetAppBundleIDs.contains($0.bundleIdentifier) }
+            if !matchingApps.isEmpty {
+                filter = SCContentFilter(display: display, including: matchingApps, exceptingWindows: [])
+            } else {
+                filter = SCContentFilter(display: display, excludingWindows: [])
+            }
+        } else {
+            filter = SCContentFilter(display: display, excludingWindows: [])
+        }
 
         // 3. Configure audio capture parameters
         let configuration = SCStreamConfiguration()

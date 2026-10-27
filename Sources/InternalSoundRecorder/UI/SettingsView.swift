@@ -38,6 +38,62 @@ public struct SettingsView: View {
 
             Divider()
 
+            // Capture Scope & App Filtering
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Capture Scope")
+                    .font(.subheadline.bold())
+
+                Picker("Scope", selection: $manager.settings.targetMode) {
+                    ForEach(CaptureTargetMode.allCases) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .disabled(manager.status.isRecordingOrPaused)
+
+                Text(manager.settings.targetMode.description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if manager.settings.targetMode == .specificApps {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Record only these running apps:")
+                            .font(.caption.bold())
+                            .foregroundColor(.secondary)
+
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 4) {
+                                ForEach(manager.meetingDetector.runningApps) { app in
+                                    Toggle(isOn: Binding(
+                                        get: { manager.settings.targetAppBundleIDs.contains(app.bundleIdentifier) },
+                                        set: { isSelected in
+                                            if isSelected {
+                                                if !manager.settings.targetAppBundleIDs.contains(app.bundleIdentifier) {
+                                                    manager.settings.targetAppBundleIDs.append(app.bundleIdentifier)
+                                                }
+                                            } else {
+                                                manager.settings.targetAppBundleIDs.removeAll { $0 == app.bundleIdentifier }
+                                            }
+                                        }
+                                    )) {
+                                        Text(app.name)
+                                            .font(.caption)
+                                    }
+                                }
+                            }
+                            .padding(6)
+                        }
+                        .frame(maxHeight: 90)
+                        .background(Color.secondary.opacity(0.08))
+                        .cornerRadius(6)
+                    }
+                    .padding(.top, 2)
+                }
+            }
+
+            Divider()
+
             // Audio Format Picker
             VStack(alignment: .leading, spacing: 6) {
                 Text("Audio Container & Codec")

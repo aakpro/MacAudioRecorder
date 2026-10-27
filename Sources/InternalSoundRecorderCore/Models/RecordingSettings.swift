@@ -52,6 +52,22 @@ public enum StemRecordingMode: String, Codable, CaseIterable, Identifiable, Send
     }
 }
 
+public enum CaptureTargetMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    case allSystem = "All System Audio (Entire Mac)"
+    case specificApps = "Selected Apps Only"
+
+    public var id: String { rawValue }
+
+    public var description: String {
+        switch self {
+        case .allSystem:
+            return "Records all sound playing across your Mac, regardless of app."
+        case .specificApps:
+            return "Records only chosen applications (e.g. MS Teams, Zoom), filtering out Spotify or Slack notification dings."
+        }
+    }
+}
+
 public struct RecordingSettings: Codable, Sendable {
     public var saveDirectory: URL
     public var audioFormat: AudioFormat
@@ -63,6 +79,8 @@ public struct RecordingSettings: Codable, Sendable {
     public var systemVolume: Float
     public var microphoneVolume: Float
     public var stemMode: StemRecordingMode
+    public var targetMode: CaptureTargetMode
+    public var targetAppBundleIDs: [String]
 
     public init(
         saveDirectory: URL? = nil,
@@ -74,7 +92,9 @@ public struct RecordingSettings: Codable, Sendable {
         includeMicrophone: Bool = true,
         systemVolume: Float = 1.0,
         microphoneVolume: Float = 1.0,
-        stemMode: StemRecordingMode = .mixedOnly
+        stemMode: StemRecordingMode = .mixedOnly,
+        targetMode: CaptureTargetMode = .allSystem,
+        targetAppBundleIDs: [String] = []
     ) {
         if let saveDirectory = saveDirectory {
             self.saveDirectory = saveDirectory
@@ -92,6 +112,8 @@ public struct RecordingSettings: Codable, Sendable {
         self.systemVolume = systemVolume
         self.microphoneVolume = microphoneVolume
         self.stemMode = stemMode
+        self.targetMode = targetMode
+        self.targetAppBundleIDs = targetAppBundleIDs
     }
 
     public static let `default` = RecordingSettings()

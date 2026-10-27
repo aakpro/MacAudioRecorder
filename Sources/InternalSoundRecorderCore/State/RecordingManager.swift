@@ -29,6 +29,7 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
     @Published public var settings: RecordingSettings = .default
 
     public let permissionManager = PermissionManager()
+    public let meetingDetector = MeetingDetector()
 
     private let captureService = AudioCaptureService()
     private let levelMeter = AudioLevelMeter()
@@ -137,6 +138,7 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
                 includeMicrophone: settings.includeMicrophone,
                 systemVolume: settings.systemVolume,
                 microphoneVolume: settings.microphoneVolume,
+                targetAppBundleIDs: (settings.targetMode == .specificApps ? settings.targetAppBundleIDs : []),
                 onAudioSample: { [weak self, writer, meter] sampleBuffer in
                     writer.append(sampleBuffer)
                     let levels = meter.processSampleBuffer(sampleBuffer)
@@ -286,6 +288,7 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
                         includeMicrophone: self.settings.includeMicrophone,
                         systemVolume: self.settings.systemVolume,
                         microphoneVolume: self.settings.microphoneVolume,
+                        targetAppBundleIDs: (self.settings.targetMode == .specificApps ? self.settings.targetAppBundleIDs : []),
                         onAudioSample: { [weak self, writer, meter] sampleBuffer in
                             writer.append(sampleBuffer)
                             let levels = meter.processSampleBuffer(sampleBuffer)
