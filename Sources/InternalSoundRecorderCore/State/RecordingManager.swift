@@ -24,6 +24,8 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
     @Published public private(set) var audioLevels: AudioLevels = .zero
     @Published public private(set) var currentRecordingURL: URL?
     @Published public private(set) var recentRecordings: [RecordingItem] = []
+    @Published public private(set) var activeMarkers: [MarkerItem] = []
+    @Published public private(set) var lastDroppedMarker: MarkerItem?
     @Published public var settings: RecordingSettings = .default
 
     public let permissionManager = PermissionManager()
@@ -31,7 +33,10 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
     private let captureService = AudioCaptureService()
     private let levelMeter = AudioLevelMeter()
     private let systemMonitor = SystemMonitor()
+
     private var activeWriter: ResilientAudioWriter?
+    private var systemStemWriter: ResilientAudioWriter?
+    private var micStemWriter: ResilientAudioWriter?
 
     private var durationTimer: Timer?
     private var isPaused = false
@@ -47,6 +52,33 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
         loadRecentRecordings()
     }
 
+    // MARK: - Volume Controls
+
+    public func updateVolumes(system: Float? = nil, mic: Float? = nil) {
+        if let s = system { settings.systemVolume = s }
+        if let m = mic { settings.microphoneVolume = m }
+        captureService.setVolumes(system: settings.systemVolume, mic: settings.microphoneVolume)
+    }
+
+    // MARK: - Marker / Bookmark Controls
+
+    @discardableResult
+    public func addMarker(label: String? = nil) -> MarkerItem {
+        let count = activeMarkers.count + 1
+        let finalLabel = label ?? "Marker #\(count)"
+        let marker = MarkerItem(timestamp: recordedDuration, label: finalLabel)
+        activeMarkers.append(marker)
+        lastDroppedMarker = marker
+
+        // Auto-clear last dropped marker toast after 3 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+            if self?.lastDroppedMarker?.id == marker.id {
+                self?.lastDroppedMarker = nil
+            }
+        }
+        return marker
+    }
+
     // MARK: - Recording Actions
 
     public func startRecording() async throws {
@@ -60,8 +92,8 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
         }
 
         let timestamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
-        let filename = "SystemRecording_\(timestamp).\(settings.audioFormat.fileExtension)"
-        let outputURL = settings.saveDirectory.appendingPathComponent(filename)
+        let baseFilename = "SystemRecording_\(timestamp)"
+        let outputURL = settings.saveDirectory.appendingPathComponent("\(baseFilename).\(settings.audioFormat.fileExtension)")
 
         do {
             let writer = try ResilientAudioWriter(
@@ -73,10 +105,25 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
                 bitRate: settings.aacBitRate
             )
 
+            // Optional stem writers if separate stems are enabled
+            var sysWriter: ResilientAudioWriter? = nil
+            var micWriter: ResilientAudioWriter? = nil
+
+            if settings.stemMode == .separateStems {
+                let sysURL = settings.saveDirectory.appendingPathComponent("\(baseFilename)_system.\(settings.audioFormat.fileExtension)")
+                let mURL = settings.saveDirectory.appendingPathComponent("\(baseFilename)_mic.\(settings.audioFormat.fileExtension)")
+                sysWriter = try? ResilientAudioWriter(outputURL: sysURL, format: settings.audioFormat, sampleRate: settings.sampleRate, channels: settings.channelCount)
+                micWriter = try? ResilientAudioWriter(outputURL: mURL, format: settings.audioFormat, sampleRate: settings.sampleRate, channels: settings.channelCount)
+            }
+
             self.activeWriter = writer
+            self.systemStemWriter = sysWriter
+            self.micStemWriter = micWriter
             self.currentRecordingURL = outputURL
             self.recordedDuration = 0
             self.currentFileSize = 0
+            self.activeMarkers = []
+            self.lastDroppedMarker = nil
             self.isPaused = false
             self.retryCount = 0
             self.recordingStartTime = Date()
@@ -87,24 +134,32 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
             try await captureService.startCapture(
                 sampleRate: settings.sampleRate,
                 channelCount: settings.channelCount,
-                includeMicrophone: settings.includeMicrophone
-            ) { [weak self, writer, meter] sampleBuffer in
-                // Write audio off main thread for low latency
-                writer.append(sampleBuffer)
-
-                // Compute audio levels for visual feedback
-                let levels = meter.processSampleBuffer(sampleBuffer)
-                DispatchQueue.main.async { [weak self] in
-                    guard let self = self, self.status == .recording else { return }
-                    self.audioLevels = levels
+                includeMicrophone: settings.includeMicrophone,
+                systemVolume: settings.systemVolume,
+                microphoneVolume: settings.microphoneVolume,
+                onAudioSample: { [weak self, writer, meter] sampleBuffer in
+                    writer.append(sampleBuffer)
+                    let levels = meter.processSampleBuffer(sampleBuffer)
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self, self.status == .recording else { return }
+                        self.audioLevels = levels
+                    }
+                },
+                onSystemSample: { [sysWriter] buffer in
+                    sysWriter?.append(buffer)
+                },
+                onMicSample: { [micWriter] buffer in
+                    micWriter?.append(buffer)
                 }
-            }
+            )
 
             self.status = .recording
             startDurationTimer()
             systemMonitor.startDiskMonitoring(for: settings.saveDirectory)
         } catch {
             self.activeWriter = nil
+            self.systemStemWriter = nil
+            self.micStemWriter = nil
             self.status = .error(error.localizedDescription)
             throw error
         }
@@ -115,6 +170,8 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
         isPaused = true
         status = .paused
         activeWriter?.flush()
+        systemStemWriter?.flush()
+        micStemWriter?.flush()
     }
 
     public func resumeRecording() {
@@ -135,13 +192,23 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
         // Stop capture stream
         try? await captureService.stopCapture()
 
-        // Gracefully finalize resilient writer
+        // Gracefully finalize resilient writers
         let finalURL: URL
         do {
             finalURL = try await writer.finish()
         } catch {
             finalURL = writer.outputURL
         }
+
+        if let sysWriter = systemStemWriter {
+            _ = try? await sysWriter.finish()
+        }
+        if let mWriter = micStemWriter {
+            _ = try? await mWriter.finish()
+        }
+
+        // Export Companion Markers File if markers were dropped
+        exportMarkersIfPresent(for: finalURL)
 
         let duration = recordedDuration
         let fileSize = writer.currentFileSize
@@ -156,6 +223,8 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
         addRecentRecording(item)
 
         self.activeWriter = nil
+        self.systemStemWriter = nil
+        self.micStemWriter = nil
         self.status = .idle
         self.recordedDuration = 0
         self.currentFileSize = 0
@@ -164,43 +233,79 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
         return finalURL
     }
 
+    // MARK: - Marker Export
+
+    private func exportMarkersIfPresent(for audioURL: URL) {
+        guard !activeMarkers.isEmpty else { return }
+
+        let baseURL = audioURL.deletingPathExtension()
+        let txtURL = baseURL.appendingPathExtension("markers.txt")
+        let jsonURL = baseURL.appendingPathExtension("markers.json")
+
+        // 1. Text Summary
+        var txtContent = "MacAudioRecorder — Meeting Markers\n"
+        txtContent += "Recording: \(audioURL.lastPathComponent)\n"
+        txtContent += "Date: \(Date().formatted())\n"
+        txtContent += "Total Markers: \(activeMarkers.count)\n"
+        txtContent += "----------------------------------------\n\n"
+        for m in activeMarkers {
+            txtContent += "[\(m.formattedTimestamp)] \(m.label)\n"
+        }
+        try? txtContent.write(to: txtURL, atomically: true, encoding: .utf8)
+
+        // 2. JSON Data
+        if let jsonData = try? JSONEncoder().encode(activeMarkers) {
+            try? jsonData.write(to: jsonURL)
+        }
+    }
+
     // MARK: - Fault Tolerance & Auto-Recovery
 
     nonisolated public func audioCaptureDidEncounterError(_ error: Error) {
         Task { @MainActor [weak self] in
             guard let self = self, self.status.isRecordingOrPaused else { return }
 
-            // Immediately flush audio buffers to disk
             self.activeWriter?.flush()
+            self.systemStemWriter?.flush()
+            self.micStemWriter?.flush()
 
             if self.retryCount < self.maxRetries {
                 self.retryCount += 1
                 self.status = .recovering
 
-                // Attempt reconnection after 1 second backoff
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard let writer = self.activeWriter else { return }
                 let meter = self.levelMeter
+                let sysWriter = self.systemStemWriter
+                let micWriter = self.micStemWriter
 
                 do {
                     try await self.captureService.startCapture(
                         sampleRate: self.settings.sampleRate,
                         channelCount: self.settings.channelCount,
-                        includeMicrophone: self.settings.includeMicrophone
-                    ) { [weak self, writer, meter] sampleBuffer in
-                        writer.append(sampleBuffer)
-                        let levels = meter.processSampleBuffer(sampleBuffer)
-                        DispatchQueue.main.async { [weak self] in
-                            guard let self = self, self.status == .recording else { return }
-                            self.audioLevels = levels
+                        includeMicrophone: self.settings.includeMicrophone,
+                        systemVolume: self.settings.systemVolume,
+                        microphoneVolume: self.settings.microphoneVolume,
+                        onAudioSample: { [weak self, writer, meter] sampleBuffer in
+                            writer.append(sampleBuffer)
+                            let levels = meter.processSampleBuffer(sampleBuffer)
+                            DispatchQueue.main.async { [weak self] in
+                                guard let self = self, self.status == .recording else { return }
+                                self.audioLevels = levels
+                            }
+                        },
+                        onSystemSample: { [sysWriter] buffer in
+                            sysWriter?.append(buffer)
+                        },
+                        onMicSample: { [micWriter] buffer in
+                            micWriter?.append(buffer)
                         }
-                    }
+                    )
                     self.status = self.isPaused ? .paused : .recording
                 } catch {
                     self.audioCaptureDidEncounterError(error)
                 }
             } else {
-                // Auto-save whatever has been captured so far
                 _ = try? await self.stopRecording()
                 self.status = .error("Capture interrupted: \(error.localizedDescription). File saved safely.")
             }
@@ -210,6 +315,8 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
     nonisolated public func audioCaptureDidStop() {
         Task { @MainActor [weak self] in
             self?.activeWriter?.flush()
+            self?.systemStemWriter?.flush()
+            self?.micStemWriter?.flush()
         }
     }
 
@@ -218,13 +325,14 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
             guard let self = self, self.status == .recording else { return }
             self.pauseRecording()
             self.activeWriter?.flush()
+            self.systemStemWriter?.flush()
+            self.micStemWriter?.flush()
         }
     }
 
     nonisolated public func systemDidWake() {
         Task { @MainActor [weak self] in
             guard let self = self else { return }
-            // When waking, ensure writer is ready and resume if previously recording
             if self.status == .paused && !self.isPaused {
                 self.resumeRecording()
             }

@@ -36,6 +36,22 @@ public enum AudioFormat: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
+public enum StemRecordingMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    case mixedOnly = "Single Unified Master Track (Recommended)"
+    case separateStems = "Separate Stems (Master + Isolated Mic & System Files)"
+
+    public var id: String { rawValue }
+
+    public var description: String {
+        switch self {
+        case .mixedOnly:
+            return "Saves one perfectly balanced stereo audio file ready for instant listening and sharing."
+        case .separateStems:
+            return "Saves the master file PLUS isolated _system.m4a and _mic.m4a files for audio editing in Logic/Audacity."
+        }
+    }
+}
+
 public struct RecordingSettings: Codable, Sendable {
     public var saveDirectory: URL
     public var audioFormat: AudioFormat
@@ -44,6 +60,9 @@ public struct RecordingSettings: Codable, Sendable {
     public var fragmentIntervalSeconds: Double
     public var aacBitRate: Int
     public var includeMicrophone: Bool
+    public var systemVolume: Float
+    public var microphoneVolume: Float
+    public var stemMode: StemRecordingMode
 
     public init(
         saveDirectory: URL? = nil,
@@ -52,7 +71,10 @@ public struct RecordingSettings: Codable, Sendable {
         channelCount: Int = 2,
         fragmentIntervalSeconds: Double = 2.0,
         aacBitRate: Int = 256000,
-        includeMicrophone: Bool = true
+        includeMicrophone: Bool = true,
+        systemVolume: Float = 1.0,
+        microphoneVolume: Float = 1.0,
+        stemMode: StemRecordingMode = .mixedOnly
     ) {
         if let saveDirectory = saveDirectory {
             self.saveDirectory = saveDirectory
@@ -67,6 +89,9 @@ public struct RecordingSettings: Codable, Sendable {
         self.fragmentIntervalSeconds = fragmentIntervalSeconds
         self.aacBitRate = aacBitRate
         self.includeMicrophone = includeMicrophone
+        self.systemVolume = systemVolume
+        self.microphoneVolume = microphoneVolume
+        self.stemMode = stemMode
     }
 
     public static let `default` = RecordingSettings()

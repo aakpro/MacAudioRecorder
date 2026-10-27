@@ -169,14 +169,23 @@ public final class AudioMixer: @unchecked Sendable {
             guard floatCount > 0 else { continue }
             let systemPtr = data.assumingMemoryBound(to: Float.self)
 
-            // Retrieve matching microphone samples from the ring buffer
-            let micSamples = state.withLock { s -> [Float] in
+            // Retrieve matching microphone samples from the ring buffer and system volume
+            let (sysVol, micSamples) = state.withLock { s -> (Float, [Float]) in
                 s.lastSystemPTS = sysPts
                 let countToTake = min(floatCount, s.micRingBuffer.count)
-                guard countToTake > 0 else { return [] }
-                let slice = Array(s.micRingBuffer.prefix(countToTake))
-                s.micRingBuffer.removeFirst(countToTake)
-                return slice
+                let slice: [Float]
+                if countToTake > 0 {
+                    slice = Array(s.micRingBuffer.prefix(countToTake))
+                    s.micRingBuffer.removeFirst(countToTake)
+                } else {
+                    slice = []
+                }
+                return (s.systemVolume, slice)
+            }
+
+            if sysVol != 1.0 {
+                var vol = sysVol
+                vDSP_vsmul(systemPtr, 1, &vol, systemPtr, 1, vDSP_Length(floatCount))
             }
 
             if !micSamples.isEmpty {
@@ -184,13 +193,13 @@ public final class AudioMixer: @unchecked Sendable {
                     guard let micPtr = micBuffer.baseAddress else { return }
                     // Vector addition: systemPtr[i] += micPtr[i]
                     vDSP_vadd(systemPtr, 1, micPtr, 1, systemPtr, 1, vDSP_Length(micSamples.count))
-
-                    // Hard clip to [-1.0, 1.0] to prevent digital clipping/distortion
-                    var minVal: Float = -1.0
-                    var maxVal: Float = 1.0
-                    vDSP_vclip(systemPtr, 1, &minVal, &maxVal, systemPtr, 1, vDSP_Length(micSamples.count))
                 }
             }
+
+            // Hard clip to [-1.0, 1.0] to prevent digital clipping/distortion
+            var minVal: Float = -1.0
+            var maxVal: Float = 1.0
+            vDSP_vclip(systemPtr, 1, &minVal, &maxVal, systemPtr, 1, vDSP_Length(floatCount))
         }
 
         return sampleBuffer

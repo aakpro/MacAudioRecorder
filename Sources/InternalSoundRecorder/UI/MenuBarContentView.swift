@@ -5,6 +5,7 @@ import InternalSoundRecorderCore
 public struct MenuBarContentView: View {
     @ObservedObject var manager: RecordingManager
     @State private var showingSettings = false
+    @State private var showingVolumeControls = false
 
     public init(manager: RecordingManager) {
         self.manager = manager
@@ -52,9 +53,13 @@ public struct MenuBarContentView: View {
             .toggleStyle(.checkbox)
             .disabled(manager.status.isRecordingOrPaused)
 
-            // Recording Status & Counter
+            // Audio Balance Controls
+            volumeControlsSection
+
+            // Recording Status, Counter & Markers
             if manager.status.isRecordingOrPaused {
                 recordingMetricsView
+                markerControlBar
             }
 
             // Controls (Start / Pause / Stop)
@@ -84,7 +89,7 @@ public struct MenuBarContentView: View {
             Image(systemName: "waveform.circle.fill")
                 .font(.title2)
                 .foregroundColor(.accentColor)
-            Text("Internal Sound Recorder")
+            Text("MacAudioRecorder")
                 .font(.headline)
             Spacer()
             statusBadge
@@ -147,7 +152,46 @@ public struct MenuBarContentView: View {
         }
     }
 
-    // MARK: - Recording Metrics
+    // MARK: - Volume Controls
+
+    private var volumeControlsSection: some View {
+        DisclosureGroup(isExpanded: $showingVolumeControls) {
+            VStack(spacing: 6) {
+                HStack {
+                    Image(systemName: "speaker.wave.2")
+                        .font(.caption)
+                        .frame(width: 16)
+                    Slider(value: $manager.settings.systemVolume, in: 0.0...2.0, step: 0.05) { _ in
+                        manager.updateVolumes()
+                    }
+                    Text("\(Int(manager.settings.systemVolume * 100))%")
+                        .font(.caption2.monospacedDigit())
+                        .frame(width: 38, alignment: .trailing)
+                }
+
+                if manager.settings.includeMicrophone {
+                    HStack {
+                        Image(systemName: "mic")
+                            .font(.caption)
+                            .frame(width: 16)
+                        Slider(value: $manager.settings.microphoneVolume, in: 0.0...2.0, step: 0.05) { _ in
+                            manager.updateVolumes()
+                        }
+                        Text("\(Int(manager.settings.microphoneVolume * 100))%")
+                            .font(.caption2.monospacedDigit())
+                            .frame(width: 38, alignment: .trailing)
+                    }
+                }
+            }
+            .padding(.top, 4)
+        } label: {
+            Text("Audio Balance & Gain")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    // MARK: - Recording Metrics & Markers
 
     private var recordingMetricsView: some View {
         HStack {
@@ -174,6 +218,37 @@ public struct MenuBarContentView: View {
         .cornerRadius(6)
     }
 
+    private var markerControlBar: some View {
+        HStack {
+            Button(action: {
+                manager.addMarker()
+            }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "bookmark.fill")
+                        .foregroundColor(.yellow)
+                        .font(.caption2)
+                    Text("Add Marker (⌘M)")
+                        .font(.caption.weight(.medium))
+                }
+            }
+            .buttonStyle(.bordered)
+            .keyboardShortcut("m", modifiers: [.command])
+
+            Spacer()
+
+            if let last = manager.lastDroppedMarker {
+                Text("Saved [\(last.formattedTimestamp)]")
+                    .font(.caption2.bold())
+                    .foregroundColor(.green)
+            } else if !manager.activeMarkers.isEmpty {
+                Text("\(manager.activeMarkers.count) markers")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.horizontal, 2)
+    }
+
     // MARK: - Controls
 
     private var controlsView: some View {
@@ -196,6 +271,7 @@ public struct MenuBarContentView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.red.opacity(0.85))
+                .keyboardShortcut("r", modifiers: [.command, .shift])
             } else {
                 // Pause / Resume Button
                 Button(action: {
@@ -209,6 +285,7 @@ public struct MenuBarContentView: View {
                         .frame(width: 32, height: 28)
                 }
                 .buttonStyle(.bordered)
+                .keyboardShortcut("p", modifiers: [.command, .shift])
 
                 // Stop & Save Button
                 Button(action: {
@@ -227,6 +304,7 @@ public struct MenuBarContentView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.red)
+                .keyboardShortcut("s", modifiers: [.command, .shift])
             }
         }
     }

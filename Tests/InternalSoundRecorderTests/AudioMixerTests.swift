@@ -59,4 +59,23 @@ final class AudioMixerTests: XCTestCase {
         // Hard clip ensures peak never exceeds 1.0 (0 dBFS)
         XCTAssertLessThanOrEqual(levels.peak, 1.0001)
     }
+
+    func testMixerVolumeScaling() {
+        let mixer = AudioMixer(systemVolume: 0.5, micVolume: 1.5)
+
+        let sysBuffer = MockAudioGenerator.makeAudioSampleBuffer(
+            frameCount: 1024,
+            sampleRate: 48000,
+            channels: 2,
+            frequency: 440.0,
+            presentationTime: CMTime(value: 0, timescale: 48000)
+        )!
+
+        let originalLevels = AudioLevelMeter().processSampleBuffer(sysBuffer)
+        let attenuatedBuffer = mixer.mixSystemAudioBuffer(sysBuffer)
+        let attenuatedLevels = AudioLevelMeter().processSampleBuffer(attenuatedBuffer)
+
+        // At 50% volume, peak should be lower than original
+        XCTAssertLessThan(attenuatedLevels.peak, originalLevels.peak)
+    }
 }

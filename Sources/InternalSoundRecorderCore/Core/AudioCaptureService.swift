@@ -19,6 +19,8 @@ public final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelega
         var isCapturing = false
         var isMicrophoneEnabled = false
         var onAudioSample: (@Sendable (CMSampleBuffer) -> Void)?
+        var onSystemSample: (@Sendable (CMSampleBuffer) -> Void)?
+        var onMicSample: (@Sendable (CMSampleBuffer) -> Void)?
     }
 
     private let state = OSAllocatedUnfairLock(initialState: State())
@@ -31,22 +33,33 @@ public final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelega
         super.init()
     }
 
+    public func setVolumes(system: Float, mic: Float) {
+        audioMixer.setVolumes(system: system, mic: mic)
+    }
+
     /// Starts capturing internal system audio (and optional microphone) across whatever output route is active
     public func startCapture(
         sampleRate: Double = 48000.0,
         channelCount: Int = 2,
         includeMicrophone: Bool = true,
-        onAudioSample: @escaping @Sendable (CMSampleBuffer) -> Void
+        systemVolume: Float = 1.0,
+        microphoneVolume: Float = 1.0,
+        onAudioSample: @escaping @Sendable (CMSampleBuffer) -> Void,
+        onSystemSample: (@Sendable (CMSampleBuffer) -> Void)? = nil,
+        onMicSample: (@Sendable (CMSampleBuffer) -> Void)? = nil
     ) async throws {
         let alreadyCapturing = state.withLock { state -> Bool in
             if state.isCapturing { return true }
             state.onAudioSample = onAudioSample
+            state.onSystemSample = onSystemSample
+            state.onMicSample = onMicSample
             state.isMicrophoneEnabled = includeMicrophone
             return false
         }
         guard !alreadyCapturing else { return }
 
         audioMixer.reset()
+        audioMixer.setVolumes(system: systemVolume, mic: microphoneVolume)
 
         // 1. Fetch available displays via SCShareableContent
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
@@ -105,6 +118,8 @@ public final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelega
             let was = state.isCapturing
             state.isCapturing = false
             state.onAudioSample = nil
+            state.onSystemSample = nil
+            state.onMicSample = nil
             return was
         }
 
@@ -120,6 +135,8 @@ public final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelega
     public func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
         if #available(macOS 15.0, *) {
             if type == .microphone {
+                let micHandler = state.withLock { $0.onMicSample }
+                micHandler?(sampleBuffer)
                 audioMixer.ingestMicrophoneBuffer(sampleBuffer)
                 return
             }
@@ -127,8 +144,13 @@ public final class AudioCaptureService: NSObject, SCStreamOutput, SCStreamDelega
 
         guard type == .audio else { return }
 
-        let (handler, micEnabled) = state.withLock { ($0.onAudioSample, $0.isMicrophoneEnabled) }
+        let (handler, sysHandler, micEnabled) = state.withLock {
+            ($0.onAudioSample, $0.onSystemSample, $0.isMicrophoneEnabled)
+        }
         guard let outputHandler = handler else { return }
+
+        // If isolated system stem is needed, forward clean buffer
+        sysHandler?(sampleBuffer)
 
         if micEnabled {
             let mixed = audioMixer.mixSystemAudioBuffer(sampleBuffer)

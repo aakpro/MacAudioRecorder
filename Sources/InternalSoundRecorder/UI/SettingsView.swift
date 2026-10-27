@@ -58,6 +58,27 @@ public struct SettingsView: View {
 
             Divider()
 
+            // Stem Mode Picker
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Stem Recording Mode")
+                    .font(.subheadline.bold())
+
+                Picker("Stem Mode", selection: $manager.settings.stemMode) {
+                    ForEach(StemRecordingMode.allCases) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
+                }
+                .pickerStyle(.radioGroup)
+                .disabled(manager.status.isRecordingOrPaused)
+
+                Text(manager.settings.stemMode.description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+
             // Fault Tolerance & Fragment Interval
             if manager.settings.audioFormat == .m4aAAC {
                 VStack(alignment: .leading, spacing: 6) {
@@ -105,7 +126,7 @@ public struct SettingsView: View {
             Spacer()
         }
         .padding(18)
-        .frame(width: 420, height: 380)
+        .frame(width: 440, height: 480)
     }
 
     private func selectSaveDirectory() {
