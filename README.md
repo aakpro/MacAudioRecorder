@@ -10,7 +10,7 @@ A native, driverless macOS menu bar application engineered to record internal sy
    - Uses Apple's native `ScreenCaptureKit` API to tap into the system audio compositor.
    - **No virtual audio cables or kernel drivers** (no BlackHole, Soundflower, or Loopback required).
    - Independent of audio output route: records audio uninterrupted whether playing through internal speakers, 3.5mm wired headphones, USB DACs, or AirPods.
-   - Microphone input is ignored—records only pure system audio.
+   - **Two-Way Meeting Mode (MS Teams, Zoom, Calls)**: Simultaneously captures your microphone and mixes your voice in real time with the other meeting participants into a single unified stereo audio track. Never miss either side of a call!
 
 2. **Fault-Tolerant Disk Persistence (Save Whatever It Can)**:
    - **Fragmented MP4 (`fMP4`)**: Uses `AVAssetWriter` configured with `movieFragmentInterval` (2.0s chunks). Rather than writing a single metadata atom (`moov`) only at the end of the file, each 2-second fragment (`moof` + `mdat`) is committed and synced atomically to disk.

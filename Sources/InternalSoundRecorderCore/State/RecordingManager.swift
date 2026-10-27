@@ -83,10 +83,11 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
 
             let meter = self.levelMeter
 
-            // Start hardware/system audio capture
+            // Start hardware/system audio capture (with two-way microphone mix if enabled)
             try await captureService.startCapture(
                 sampleRate: settings.sampleRate,
-                channelCount: settings.channelCount
+                channelCount: settings.channelCount,
+                includeMicrophone: settings.includeMicrophone
             ) { [weak self, writer, meter] sampleBuffer in
                 // Write audio off main thread for low latency
                 writer.append(sampleBuffer)
@@ -184,7 +185,8 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
                 do {
                     try await self.captureService.startCapture(
                         sampleRate: self.settings.sampleRate,
-                        channelCount: self.settings.channelCount
+                        channelCount: self.settings.channelCount,
+                        includeMicrophone: self.settings.includeMicrophone
                     ) { [weak self, writer, meter] sampleBuffer in
                         writer.append(sampleBuffer)
                         let levels = meter.processSampleBuffer(sampleBuffer)

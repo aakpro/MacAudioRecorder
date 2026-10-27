@@ -23,7 +23,7 @@
     <key>NSScreenCaptureUsageDescription</key>
     <string>Internal Sound Recorder requires screen and system audio recording permission to record whatever is playing on your Mac without virtual audio cables.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Internal Sound Recorder captures system audio and does not use the microphone.</string>
+    <string>Internal Sound Recorder captures your microphone to record your voice in meetings and calls alongside system audio.</string>
     <key>NSHighResolutionCapable</key>
     <true/>
 </dict>

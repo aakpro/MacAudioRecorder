@@ -39,6 +39,19 @@ public struct MenuBarContentView: View {
                 )
             }
 
+            // Two-Way Meeting Mode (Include My Voice)
+            Toggle(isOn: $manager.settings.includeMicrophone) {
+                HStack(spacing: 5) {
+                    Image(systemName: manager.settings.includeMicrophone ? "mic.fill" : "mic.slash")
+                        .foregroundColor(manager.settings.includeMicrophone ? .green : .secondary)
+                        .font(.caption)
+                    Text("Include My Voice (Two-Way Meeting Mode)")
+                        .font(.caption.weight(.medium))
+                }
+            }
+            .toggleStyle(.checkbox)
+            .disabled(manager.status.isRecordingOrPaused)
+
             // Recording Status & Counter
             if manager.status.isRecordingOrPaused {
                 recordingMetricsView

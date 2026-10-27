@@ -43,6 +43,7 @@ public struct RecordingSettings: Codable, Sendable {
     public var channelCount: Int
     public var fragmentIntervalSeconds: Double
     public var aacBitRate: Int
+    public var includeMicrophone: Bool
 
     public init(
         saveDirectory: URL? = nil,
@@ -50,7 +51,8 @@ public struct RecordingSettings: Codable, Sendable {
         sampleRate: Double = 48000.0,
         channelCount: Int = 2,
         fragmentIntervalSeconds: Double = 2.0,
-        aacBitRate: Int = 256000
+        aacBitRate: Int = 256000,
+        includeMicrophone: Bool = true
     ) {
         if let saveDirectory = saveDirectory {
             self.saveDirectory = saveDirectory
@@ -64,6 +66,7 @@ public struct RecordingSettings: Codable, Sendable {
         self.channelCount = channelCount
         self.fragmentIntervalSeconds = fragmentIntervalSeconds
         self.aacBitRate = aacBitRate
+        self.includeMicrophone = includeMicrophone
     }
 
     public static let `default` = RecordingSettings()

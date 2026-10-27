@@ -24,6 +24,20 @@ public struct SettingsView: View {
 
             Divider()
 
+            // Two-Way Meeting Mode (Microphone Input)
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle("Record My Voice (Two-Way Meeting Mode)", isOn: $manager.settings.includeMicrophone)
+                    .font(.subheadline.bold())
+                    .disabled(manager.status.isRecordingOrPaused)
+
+                Text("When enabled, your microphone is mixed with the internal system audio so both you and the other participants in MS Teams, Zoom, or calls are saved in the same recording.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+
             // Audio Format Picker
             VStack(alignment: .leading, spacing: 6) {
                 Text("Audio Container & Codec")
