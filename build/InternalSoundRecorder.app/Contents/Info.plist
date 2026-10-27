@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.internalsoundrecorder.app</string>
+    <key>CFBundleName</key>
+    <string>InternalSoundRecorder</string>
+    <key>CFBundleDisplayName</key>
+    <string>Internal Sound Recorder</string>
+    <key>CFBundleExecutable</key>
+    <string>InternalSoundRecorder</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>Internal Sound Recorder requires screen and system audio recording permission to record whatever is playing on your Mac without virtual audio cables.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Internal Sound Recorder captures system audio and does not use the microphone.</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+</dict>
+</plist>
