@@ -128,12 +128,27 @@ public struct MenuBarContentView: View {
         } else {
             switch manager.status {
             case .idle:
-                Text("Ready")
-                    .font(.caption2.weight(.semibold))
+                if let err = manager.lastTranscriptionError {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                            .font(.system(size: 9))
+                        Text("Ready (Notes notice)")
+                            .font(.caption2.weight(.semibold))
+                    }
+                    .help(err)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color.secondary.opacity(0.2))
+                    .background(Color.orange.opacity(0.15))
                     .cornerRadius(4)
+                } else {
+                    Text("Ready")
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.2))
+                        .cornerRadius(4)
+                }
             case .recording:
                 HStack(spacing: 4) {
                     Circle().fill(Color.red).frame(width: 6, height: 6)
@@ -392,7 +407,46 @@ public struct MenuBarContentView: View {
 
             Spacer()
 
-            // Play / Open
+            // Quick Actions: Notes (.md)
+            if item.hasNotes {
+                Button(action: {
+                    NSWorkspace.shared.open(item.notesURL)
+                }) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 13))
+                        .foregroundColor(.purple)
+                }
+                .buttonStyle(.plain)
+                .help("Open Meeting Notes (.md)")
+            }
+
+            // Quick Actions: Subtitles (.srt)
+            if item.hasSubtitles {
+                Button(action: {
+                    NSWorkspace.shared.open(item.srtURL)
+                }) {
+                    Image(systemName: "captions.bubble")
+                        .font(.system(size: 13))
+                        .foregroundColor(.blue)
+                }
+                .buttonStyle(.plain)
+                .help("Open Subtitles (.srt)")
+            }
+
+            // Quick Actions: Raw Transcript (.txt)
+            if item.hasTranscript {
+                Button(action: {
+                    NSWorkspace.shared.open(item.transcriptURL)
+                }) {
+                    Image(systemName: "text.alignleft")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Open Transcript (.txt)")
+            }
+
+            // Play / Open Audio
             Button(action: {
                 NSWorkspace.shared.open(item.url)
             }) {

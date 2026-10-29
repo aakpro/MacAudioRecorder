@@ -27,6 +27,7 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
     @Published public private(set) var activeMarkers: [MarkerItem] = []
     @Published public private(set) var lastDroppedMarker: MarkerItem?
     @Published public private(set) var isTranscribing: Bool = false
+    @Published public private(set) var lastTranscriptionError: String? = nil
     @Published public var settings: RecordingSettings = .default
 
     public let permissionManager = PermissionManager()
@@ -217,14 +218,48 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
         // Trigger On-Device AI Transcription if enabled
         if settings.autoTranscribe {
             self.isTranscribing = true
+            self.lastTranscriptionError = nil
             let capturedMarkers = self.activeMarkers
             let service = self.transcriptionService
+            let primaryLocale = self.settings.transcriptionPrimaryLocale
+            let secondaryLocale = self.settings.transcriptionSecondaryLocale
+            let preferOnDevice = self.settings.preferOnDeviceRecognition
+            let duration = recordedDuration
+
             Task {
-                if let result = try? await service.transcribe(audioURL: finalURL) {
-                    _ = try? service.exportCompanionArtifacts(for: finalURL, result: result, markers: capturedMarkers)
-                }
-                await MainActor.run { [weak self] in
-                    self?.isTranscribing = false
+                do {
+                    let result = try await service.transcribe(
+                        audioURL: finalURL,
+                        primaryLocaleID: primaryLocale,
+                        secondaryLocaleID: secondaryLocale,
+                        preferOnDevice: preferOnDevice
+                    )
+                    try service.exportCompanionArtifacts(
+                        for: finalURL,
+                        result: result,
+                        markers: capturedMarkers,
+                        audioDuration: duration
+                    )
+                    await MainActor.run { [weak self] in
+                        self?.isTranscribing = false
+                        self?.lastTranscriptionError = nil
+                        self?.loadRecentRecordings()
+                    }
+                } catch {
+                    let errorMsg = error.localizedDescription
+                    // Even if transcription fails, ALWAYS export meeting notes with markers & metadata!
+                    let emptyResult = TranscriptionResult(fullText: "", segments: [])
+                    _ = try? service.exportCompanionArtifacts(
+                        for: finalURL,
+                        result: emptyResult,
+                        markers: capturedMarkers,
+                        audioDuration: duration
+                    )
+                    await MainActor.run { [weak self] in
+                        self?.isTranscribing = false
+                        self?.lastTranscriptionError = errorMsg
+                        self?.loadRecentRecordings()
+                    }
                 }
             }
         }
