@@ -22,12 +22,16 @@ A native, driverless macOS menu bar application engineered to record internal sy
    - Flushes buffers to disk immediately on `NSWorkspace.willSleepNotification`.
    - Low disk space detection stops recording safely before disk exhaustion causes file corruption.
 
-4. **Sleek Menu Bar Interface**:
-   - Lives in the macOS menu bar as a `MenuBarExtra` window.
+4. **Sleek Menu Bar Interface & Lifecycle Management**:
+   - Lives in the macOS menu bar as a `MenuBarExtra` window with custom high-resolution native App Icon.
+   - **Single-Instance Lifecycle Enforcement**: Guarantees that only one instance of the app runs at any time, terminating stale or duplicate background instances when launching from Xcode or Terminal.
    - Real-time animated audio level visualizer (RMS & Peak dBFS meter computed with Apple's `Accelerate` / `vDSP` framework).
    - One-click Start, Pause, Resume, Stop & Save.
    - Recent recordings list with quick "Play" and "Show in Finder" buttons.
    - Permission status banner with direct deep link to macOS Privacy & Security settings.
+
+5. **Universal 2 Binary Support**:
+   - Compiles native slices for both Apple Silicon (`arm64`) and Intel (`x86_64`) Macs.
 
 ---
 
@@ -35,9 +39,10 @@ A native, driverless macOS menu bar application engineered to record internal sy
 
 | Command | Action |
 | :--- | :--- |
-| `make build` | Compiles the release binary, packages into `build/InternalSoundRecorder.app`, and applies ad-hoc codesign. |
+| `make build` | Compiles Universal 2 release binary (`arm64` + `x86_64`), packages into `build/InternalSoundRecorder.app`, embeds App Icon, and applies ad-hoc codesign. |
+| `make open` | Opens the project directly in Xcode (`open Package.swift`). |
 | `make run` | Builds and launches `build/InternalSoundRecorder.app`. |
-| `make test` | Runs the full test suite (11 unit and fault-tolerance integration tests). |
+| `make test` | Runs the full test suite (24 unit and fault-tolerance integration tests). |
 | `make build-debug` | Compiles debug binary quickly via `swift build`. |
 | `make clean` | Removes build directories and cached compilation artifacts. |
 
