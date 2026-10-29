@@ -82,6 +82,9 @@ public struct RecordingSettings: Codable, Sendable {
     public var targetMode: CaptureTargetMode
     public var targetAppBundleIDs: [String]
     public var autoTranscribe: Bool
+    public var transcriptionPrimaryLocale: String
+    public var transcriptionSecondaryLocale: String?
+    public var preferOnDeviceRecognition: Bool
 
     public init(
         saveDirectory: URL? = nil,
@@ -96,7 +99,10 @@ public struct RecordingSettings: Codable, Sendable {
         stemMode: StemRecordingMode = .mixedOnly,
         targetMode: CaptureTargetMode = .allSystem,
         targetAppBundleIDs: [String] = [],
-        autoTranscribe: Bool = true
+        autoTranscribe: Bool = true,
+        transcriptionPrimaryLocale: String = "auto",
+        transcriptionSecondaryLocale: String? = nil,
+        preferOnDeviceRecognition: Bool = true
     ) {
         if let saveDirectory = saveDirectory {
             self.saveDirectory = saveDirectory
@@ -117,6 +123,9 @@ public struct RecordingSettings: Codable, Sendable {
         self.targetMode = targetMode
         self.targetAppBundleIDs = targetAppBundleIDs
         self.autoTranscribe = autoTranscribe
+        self.transcriptionPrimaryLocale = transcriptionPrimaryLocale
+        self.transcriptionSecondaryLocale = transcriptionSecondaryLocale
+        self.preferOnDeviceRecognition = preferOnDeviceRecognition
     }
 
     public static let `default` = RecordingSettings()

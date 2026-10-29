@@ -50,4 +50,32 @@ public struct RecordingItem: Identifiable, Codable, Sendable, Equatable {
         formatter.timeStyle = .short
         return formatter.string(from: createdAt)
     }
+
+    // MARK: - Companion Artifacts
+
+    public var srtURL: URL {
+        url.deletingPathExtension().appendingPathExtension("srt")
+    }
+
+    public var notesURL: URL {
+        let base = url.deletingPathExtension().path
+        return URL(fileURLWithPath: "\(base)_Notes.md")
+    }
+
+    public var transcriptURL: URL {
+        let base = url.deletingPathExtension().path
+        return URL(fileURLWithPath: "\(base)_Transcript.txt")
+    }
+
+    public var hasSubtitles: Bool {
+        FileManager.default.fileExists(atPath: srtURL.path)
+    }
+
+    public var hasNotes: Bool {
+        FileManager.default.fileExists(atPath: notesURL.path)
+    }
+
+    public var hasTranscript: Bool {
+        FileManager.default.fileExists(atPath: transcriptURL.path)
+    }
 }
