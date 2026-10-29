@@ -198,11 +198,12 @@ public final class ResilientAudioWriter: @unchecked Sendable {
 
         input.markAsFinished()
 
+        nonisolated(unsafe) let writerToFinish = writer
         return try await withCheckedThrowingContinuation { continuation in
-            writer.finishWriting {
-                if writer.status == .completed {
+            writerToFinish.finishWriting {
+                if writerToFinish.status == .completed {
                     continuation.resume(returning: self.outputURL)
-                } else if let error = writer.error {
+                } else if let error = writerToFinish.error {
                     continuation.resume(throwing: error)
                 } else {
                     continuation.resume(returning: self.outputURL)

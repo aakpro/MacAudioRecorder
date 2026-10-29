@@ -6,6 +6,14 @@ import InternalSoundRecorderCore
 struct InternalSoundRecorderApp: App {
     @StateObject private var manager = RecordingManager()
 
+    init() {
+        // Guarantee menu-bar accessory behavior even when launched directly as an SPM binary in Xcode
+        NSApplication.shared.setActivationPolicy(.accessory)
+
+        // Terminate any duplicate or stale background instances so only this active instance runs
+        SingleInstanceManager.shared.enforceSingleInstance()
+    }
+
     var body: some Scene {
         MenuBarExtra {
             MenuBarContentView(manager: manager)
