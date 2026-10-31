@@ -6,6 +6,7 @@ private final class RecognitionContext: @unchecked Sendable {
     private let lock = NSLock()
     private var hasResumed = false
     private var task: SFSpeechRecognitionTask?
+    private var latestResult: SFSpeechRecognitionResult?
 
     func setTask(_ t: SFSpeechRecognitionTask) {
         lock.lock()
@@ -13,12 +14,18 @@ private final class RecognitionContext: @unchecked Sendable {
         self.task = t
     }
 
-    func resumeOnce(action: (SFSpeechRecognitionTask?) -> Void) {
+    func setLatestResult(_ r: SFSpeechRecognitionResult) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.latestResult = r
+    }
+
+    func resumeOnce(action: (SFSpeechRecognitionTask?, SFSpeechRecognitionResult?) -> Void) {
         lock.lock()
         defer { lock.unlock() }
         guard !hasResumed else { return }
         hasResumed = true
-        action(task)
+        action(task, latestResult)
     }
 }
 
@@ -198,23 +205,28 @@ public final class SpeechTranscriptionService: @unchecked Sendable {
         recognizer: SFSpeechRecognizer,
         preferOnDevice: Bool
     ) async throws -> TranscriptionResult {
-        do {
-            return try await performSingleRecognition(
-                audioURL: audioURL,
-                recognizer: recognizer,
-                requireOnDevice: preferOnDevice && recognizer.supportsOnDeviceRecognition
-            )
-        } catch {
-            let nsErr = error as NSError
-            // If on-device recognition failed because model assets are missing (Code=1700), retry without on-device requirement
-            if preferOnDevice && (nsErr.domain == "kAFAssistantErrorDomain" && nsErr.code == 1700) {
+        if preferOnDevice && recognizer.supportsOnDeviceRecognition {
+            do {
+                return try await performSingleRecognition(
+                    audioURL: audioURL,
+                    recognizer: recognizer,
+                    requireOnDevice: true
+                )
+            } catch {
+                // If on-device recognition fails for ANY reason (model asset missing, offline engine error, etc.),
+                // automatically fall back to standard recognition so the user always gets their transcript!
                 return try await performSingleRecognition(
                     audioURL: audioURL,
                     recognizer: recognizer,
                     requireOnDevice: false
                 )
             }
-            throw error
+        } else {
+            return try await performSingleRecognition(
+                audioURL: audioURL,
+                recognizer: recognizer,
+                requireOnDevice: false
+            )
         }
     }
 
@@ -224,7 +236,7 @@ public final class SpeechTranscriptionService: @unchecked Sendable {
         requireOnDevice: Bool
     ) async throws -> TranscriptionResult {
         let request = SFSpeechURLRecognitionRequest(url: audioURL)
-        request.shouldReportPartialResults = false
+        request.shouldReportPartialResults = true
         request.addsPunctuation = true
         request.taskHint = .dictation
         request.requiresOnDeviceRecognition = requireOnDevice
@@ -234,9 +246,35 @@ public final class SpeechTranscriptionService: @unchecked Sendable {
             let localeID = recognizer.locale.identifier
 
             let task = recognizer.recognitionTask(with: request) { result, error in
+                if let r = result {
+                    context.setLatestResult(r)
+                }
+
                 if let error = error {
-                    context.resumeOnce { _ in
+                    context.resumeOnce { _, savedResult in
+                        // If we already captured valid speech transcription segments before the error/EOF,
+                        // return what was captured rather than discarding the transcript!
+                        if let best = savedResult?.bestTranscription, !best.segments.isEmpty {
+                            let segments = best.segments.map { s in
+                                TranscriptSegment(
+                                    timestamp: s.timestamp,
+                                    duration: s.duration,
+                                    text: s.substring,
+                                    confidence: s.confidence,
+                                    languageCode: localeID
+                                )
+                            }
+                            let res = TranscriptionResult(
+                                fullText: best.formattedString,
+                                segments: segments,
+                                detectedLanguages: [localeID]
+                            )
+                            continuation.resume(returning: res)
+                            return
+                        }
+
                         let nsErr = error as NSError
+                        // Silence or no speech detected (kAFAssistantErrorDomain Code=1110)
                         if nsErr.domain == "kAFAssistantErrorDomain" && nsErr.code == 1110 {
                             continuation.resume(returning: TranscriptionResult(fullText: "", segments: [], detectedLanguages: [localeID]))
                         } else {
@@ -248,7 +286,7 @@ public final class SpeechTranscriptionService: @unchecked Sendable {
 
                 guard let finalResult = result, finalResult.isFinal else { return }
 
-                context.resumeOnce { _ in
+                context.resumeOnce { _, _ in
                     let best = finalResult.bestTranscription
                     let segments = best.segments.map { s in
                         TranscriptSegment(
@@ -272,9 +310,27 @@ public final class SpeechTranscriptionService: @unchecked Sendable {
 
             // Safety timeout: If recognition takes longer than 90 seconds without callback, cancel safely
             DispatchQueue.global().asyncAfter(deadline: .now() + 90.0) {
-                context.resumeOnce { currentTask in
+                context.resumeOnce { currentTask, savedResult in
                     currentTask?.cancel()
-                    continuation.resume(returning: TranscriptionResult(fullText: "", segments: [], detectedLanguages: [localeID]))
+
+                    if let best = savedResult?.bestTranscription, !best.segments.isEmpty {
+                        let segments = best.segments.map { s in
+                            TranscriptSegment(
+                                timestamp: s.timestamp,
+                                duration: s.duration,
+                                text: s.substring,
+                                confidence: s.confidence,
+                                languageCode: localeID
+                            )
+                        }
+                        continuation.resume(returning: TranscriptionResult(
+                            fullText: best.formattedString,
+                            segments: segments,
+                            detectedLanguages: [localeID]
+                        ))
+                    } else {
+                        continuation.resume(returning: TranscriptionResult(fullText: "", segments: [], detectedLanguages: [localeID]))
+                    }
                 }
             }
         }

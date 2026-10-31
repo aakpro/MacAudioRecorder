@@ -33,8 +33,37 @@ public struct MenuBarContentView: View {
             }
 
             // Permission Warning if missing
-            if !manager.permissionManager.hasScreenCapturePermission {
+            if !manager.permissionManager.hasScreenCapturePermission || (!manager.permissionManager.hasSpeechRecognitionPermission && manager.settings.autoTranscribe) {
                 PermissionBannerView(permissionManager: manager.permissionManager)
+            }
+
+            // Transcription Notice / Error Banner
+            if let err = manager.lastTranscriptionError {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .foregroundColor(.orange)
+                        .font(.caption)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Transcription Notice")
+                            .font(.caption2.bold())
+                        Text(err)
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Button(action: {
+                        manager.clearTranscriptionError()
+                    }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(8)
+                .background(Color.orange.opacity(0.12))
+                .cornerRadius(6)
             }
 
             // Live Audio Level & Waveform
@@ -205,9 +234,10 @@ public struct MenuBarContentView: View {
                     Image(systemName: "speaker.wave.2")
                         .font(.caption)
                         .frame(width: 16)
-                    Slider(value: $manager.settings.systemVolume, in: 0.0...2.0, step: 0.05) { _ in
-                        manager.updateVolumes()
-                    }
+                    Slider(value: Binding(
+                        get: { manager.settings.systemVolume },
+                        set: { manager.updateVolumes(system: $0) }
+                    ), in: 0.0...2.0, step: 0.05)
                     Text("\(Int(manager.settings.systemVolume * 100))%")
                         .font(.caption2.monospacedDigit())
                         .frame(width: 38, alignment: .trailing)
@@ -218,9 +248,10 @@ public struct MenuBarContentView: View {
                         Image(systemName: "mic")
                             .font(.caption)
                             .frame(width: 16)
-                        Slider(value: $manager.settings.microphoneVolume, in: 0.0...2.0, step: 0.05) { _ in
-                            manager.updateVolumes()
-                        }
+                        Slider(value: Binding(
+                            get: { manager.settings.microphoneVolume },
+                            set: { manager.updateVolumes(mic: $0) }
+                        ), in: 0.0...2.0, step: 0.05)
                         Text("\(Int(manager.settings.microphoneVolume * 100))%")
                             .font(.caption2.monospacedDigit())
                             .frame(width: 38, alignment: .trailing)

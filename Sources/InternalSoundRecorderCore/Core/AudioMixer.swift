@@ -169,8 +169,8 @@ public final class AudioMixer: @unchecked Sendable {
             guard floatCount > 0 else { continue }
             let systemPtr = data.assumingMemoryBound(to: Float.self)
 
-            // Retrieve matching microphone samples from the ring buffer and system volume
-            let (sysVol, micSamples) = state.withLock { s -> (Float, [Float]) in
+            // Retrieve matching microphone samples from the ring buffer and volume settings
+            let (sysVol, micVol, micSamples) = state.withLock { s -> (Float, Float, [Float]) in
                 s.lastSystemPTS = sysPts
                 let countToTake = min(floatCount, s.micRingBuffer.count)
                 let slice: [Float]
@@ -180,7 +180,7 @@ public final class AudioMixer: @unchecked Sendable {
                 } else {
                     slice = []
                 }
-                return (s.systemVolume, slice)
+                return (s.systemVolume, s.micVolume, slice)
             }
 
             if sysVol != 1.0 {
@@ -189,10 +189,15 @@ public final class AudioMixer: @unchecked Sendable {
             }
 
             if !micSamples.isEmpty {
-                micSamples.withUnsafeBufferPointer { micBuffer in
+                var scaledMic = micSamples
+                if micVol != 1.0 {
+                    var mVol = micVol
+                    vDSP_vsmul(scaledMic, 1, &mVol, &scaledMic, 1, vDSP_Length(scaledMic.count))
+                }
+                scaledMic.withUnsafeBufferPointer { micBuffer in
                     guard let micPtr = micBuffer.baseAddress else { return }
                     // Vector addition: systemPtr[i] += micPtr[i]
-                    vDSP_vadd(systemPtr, 1, micPtr, 1, systemPtr, 1, vDSP_Length(micSamples.count))
+                    vDSP_vadd(systemPtr, 1, micPtr, 1, systemPtr, 1, vDSP_Length(scaledMic.count))
                 }
             }
 

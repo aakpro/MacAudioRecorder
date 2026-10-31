@@ -85,6 +85,10 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
 
     // MARK: - Recording Actions
 
+    public func clearTranscriptionError() {
+        lastTranscriptionError = nil
+    }
+
     public func startRecording() async throws {
         guard status == .idle || (caseError(status)) else { return }
 
@@ -93,6 +97,11 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
             permissionManager.requestPermission()
             status = .error("Screen & System Audio Recording permission required.")
             return
+        }
+
+        // Proactively request speech recognition permission if auto-transcribe is enabled
+        if settings.autoTranscribe && !permissionManager.hasSpeechRecognitionPermission {
+            _ = await permissionManager.requestSpeechRecognitionPermission()
         }
 
         let timestamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
@@ -241,9 +250,11 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
                         audioDuration: duration
                     )
                     await MainActor.run { [weak self] in
-                        self?.isTranscribing = false
-                        self?.lastTranscriptionError = nil
-                        self?.loadRecentRecordings()
+                        guard let self = self else { return }
+                        self.isTranscribing = false
+                        self.lastTranscriptionError = nil
+                        self.loadRecentRecordings()
+                        self.objectWillChange.send()
                     }
                 } catch {
                     let errorMsg = error.localizedDescription
@@ -256,9 +267,11 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
                         audioDuration: duration
                     )
                     await MainActor.run { [weak self] in
-                        self?.isTranscribing = false
-                        self?.lastTranscriptionError = errorMsg
-                        self?.loadRecentRecordings()
+                        guard let self = self else { return }
+                        self.isTranscribing = false
+                        self.lastTranscriptionError = errorMsg
+                        self.loadRecentRecordings()
+                        self.objectWillChange.send()
                     }
                 }
             }

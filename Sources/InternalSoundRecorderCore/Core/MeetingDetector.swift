@@ -29,7 +29,7 @@ public final class MeetingDetector: ObservableObject {
         "com.apple.Safari": "Safari"
     ]
 
-    private var workspaceObserver: (any NSObjectProtocol)?
+    private var workspaceObservers: [any NSObjectProtocol] = []
 
     public init() {
         scanRunningApps()
@@ -37,7 +37,7 @@ public final class MeetingDetector: ObservableObject {
     }
 
     isolated deinit {
-        if let obs = workspaceObserver {
+        for obs in workspaceObservers {
             NSWorkspace.shared.notificationCenter.removeObserver(obs)
         }
     }
@@ -56,19 +56,24 @@ public final class MeetingDetector: ObservableObject {
     }
 
     private func checkForMeetingApps() {
+        var detected: String? = nil
         for app in runningApps {
             if let friendlyName = knownMeetingApps[app.bundleIdentifier] {
-                // Focus on primary meeting clients first
+                // Prioritize dedicated meeting clients first
                 if app.bundleIdentifier.contains("teams") || app.bundleIdentifier.contains("zoom") || app.bundleIdentifier.contains("webex") || app.bundleIdentifier.contains("FaceTime") {
-                    self.detectedMeetingApp = friendlyName
-                    return
+                    detected = friendlyName
+                    break
+                } else if detected == nil {
+                    detected = friendlyName
                 }
             }
         }
+        self.detectedMeetingApp = detected
     }
 
     private func setupWorkspaceObserver() {
-        workspaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
+        let center = NSWorkspace.shared.notificationCenter
+        let launchObs = center.addObserver(
             forName: NSWorkspace.didLaunchApplicationNotification,
             object: nil,
             queue: .main
@@ -77,5 +82,17 @@ public final class MeetingDetector: ObservableObject {
                 self?.scanRunningApps()
             }
         }
+
+        let termObs = center.addObserver(
+            forName: NSWorkspace.didTerminateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.scanRunningApps()
+            }
+        }
+
+        workspaceObservers = [launchObs, termObs]
     }
 }

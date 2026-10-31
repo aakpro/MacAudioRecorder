@@ -11,13 +11,15 @@ fi
 SWIFT_BIN="xcrun --toolchain XcodeDefault swift"
 
 # InternalSoundRecorder App Bundler Script
-echo "==> Building InternalSoundRecorder in Release mode..."
-if ${SWIFT_BIN} build -c release --arch arm64 --arch x86_64 2>/dev/null; then
+echo "==> Building InternalSoundRecorder in Release mode with embedded Info.plist..."
+LINK_FLAGS="-Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker Resources/Info.plist"
+
+if ${SWIFT_BIN} build -c release --arch arm64 --arch x86_64 ${LINK_FLAGS} 2>/dev/null; then
     BIN_DIR=$(${SWIFT_BIN} build -c release --arch arm64 --arch x86_64 --show-bin-path)
     echo "==> Universal 2 binary (arm64 + x86_64) built successfully."
 else
     echo "==> Dual-architecture build not supported on this environment; building for host architecture..."
-    ${SWIFT_BIN} build -c release
+    ${SWIFT_BIN} build -c release ${LINK_FLAGS}
     BIN_DIR=$(${SWIFT_BIN} build -c release --show-bin-path)
 fi
 

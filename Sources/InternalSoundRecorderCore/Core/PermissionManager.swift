@@ -10,6 +10,8 @@ public final class PermissionManager: ObservableObject {
     @Published public private(set) var hasScreenCapturePermission: Bool = false
     @Published public private(set) var hasMicrophonePermission: Bool = false
     @Published public private(set) var hasSpeechRecognitionPermission: Bool = false
+    @Published public private(set) var speechRecognitionStatus: SFSpeechRecognizerAuthorizationStatus = .notDetermined
+    @Published public private(set) var microphoneStatus: AVAuthorizationStatus = .notDetermined
 
     public init() {
         checkPermission()
@@ -20,11 +22,13 @@ public final class PermissionManager: ObservableObject {
         let authorizedScreen = CGPreflightScreenCaptureAccess()
         self.hasScreenCapturePermission = authorizedScreen
 
-        let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
-        self.hasMicrophonePermission = (micStatus == .authorized)
+        let mic = AVCaptureDevice.authorizationStatus(for: .audio)
+        self.microphoneStatus = mic
+        self.hasMicrophonePermission = (mic == .authorized)
 
-        let speechStatus = SFSpeechRecognizer.authorizationStatus()
-        self.hasSpeechRecognitionPermission = (speechStatus == .authorized)
+        let speech = SFSpeechRecognizer.authorizationStatus()
+        self.speechRecognitionStatus = speech
+        self.hasSpeechRecognitionPermission = (speech == .authorized)
 
         return authorizedScreen
     }
@@ -34,7 +38,7 @@ public final class PermissionManager: ObservableObject {
             _ = CGRequestScreenCaptureAccess()
         }
 
-        if !hasMicrophonePermission {
+        if !hasMicrophonePermission && microphoneStatus == .notDetermined {
             AVCaptureDevice.requestAccess(for: .audio) { [weak self] _ in
                 DispatchQueue.main.async {
                     self?.checkPermission()
@@ -42,7 +46,7 @@ public final class PermissionManager: ObservableObject {
             }
         }
 
-        if !hasSpeechRecognitionPermission {
+        if !hasSpeechRecognitionPermission && speechRecognitionStatus == .notDetermined {
             SFSpeechRecognizer.requestAuthorization { [weak self] _ in
                 DispatchQueue.main.async {
                     self?.checkPermission()
@@ -63,6 +67,17 @@ public final class PermissionManager: ObservableObject {
         }
     }
 
+    @discardableResult
+    public func requestSpeechRecognitionPermission() async -> Bool {
+        let authorized = await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { status in
+                continuation.resume(returning: status == .authorized)
+            }
+        }
+        self.checkPermission()
+        return authorized
+    }
+
     public func openSystemSettings() {
         let urlString = "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
         if let url = URL(string: urlString) {
@@ -72,6 +87,13 @@ public final class PermissionManager: ObservableObject {
 
     public func openSpeechRecognitionSettings() {
         let urlString = "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition"
+        if let url = URL(string: urlString) {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    public func openMicrophoneSettings() {
+        let urlString = "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
         if let url = URL(string: urlString) {
             NSWorkspace.shared.open(url)
         }
