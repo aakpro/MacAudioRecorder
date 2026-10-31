@@ -99,8 +99,8 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
             return
         }
 
-        // Proactively request speech recognition permission if auto-transcribe is enabled
-        if settings.autoTranscribe && !permissionManager.hasSpeechRecognitionPermission {
+        // Proactively request speech recognition permission if auto-transcribe is enabled with Apple Speech engine
+        if settings.autoTranscribe && settings.transcriptionEngine == .apple && !permissionManager.hasSpeechRecognitionPermission {
             _ = await permissionManager.requestSpeechRecognitionPermission()
         }
 
@@ -230,6 +230,8 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
             self.lastTranscriptionError = nil
             let capturedMarkers = self.activeMarkers
             let service = self.transcriptionService
+            let engine = self.settings.transcriptionEngine
+            let whisperModel = self.settings.whisperModel
             let primaryLocale = self.settings.transcriptionPrimaryLocale
             let secondaryLocale = self.settings.transcriptionSecondaryLocale
             let preferOnDevice = self.settings.preferOnDeviceRecognition
@@ -239,9 +241,11 @@ public final class RecordingManager: ObservableObject, AudioCaptureServiceDelega
                 do {
                     let result = try await service.transcribe(
                         audioURL: finalURL,
+                        engine: engine,
                         primaryLocaleID: primaryLocale,
                         secondaryLocaleID: secondaryLocale,
-                        preferOnDevice: preferOnDevice
+                        preferOnDevice: preferOnDevice,
+                        whisperModel: whisperModel
                     )
                     try service.exportCompanionArtifacts(
                         for: finalURL,

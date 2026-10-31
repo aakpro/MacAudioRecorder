@@ -97,39 +97,80 @@ public struct SettingsView: View {
 
             if manager.settings.autoTranscribe {
                 VStack(alignment: .leading, spacing: 8) {
-                    // Speech Recognition Permission Check
-                    if !manager.permissionManager.hasSpeechRecognitionPermission {
-                        HStack(spacing: 6) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundColor(.yellow)
-                                .font(.caption)
-                            Text("Speech Recognition permission required.")
-                                .font(.caption2.bold())
-                            Spacer()
-                            Button("Authorize") {
-                                manager.permissionManager.requestSpeechRecognitionPermission()
+                    // Transcription Engine Selector
+                    HStack {
+                        Text("AI Engine:")
+                            .font(.caption.bold())
+                            .frame(width: 140, alignment: .leading)
+
+                        Picker("", selection: $manager.settings.transcriptionEngine) {
+                            ForEach(TranscriptionEngine.allCases, id: \.self) { engine in
+                                Text(engine.displayName).tag(engine)
                             }
-                            .buttonStyle(.bordered)
-                            .controlSize(.mini)
                         }
-                        .padding(6)
-                        .background(Color.yellow.opacity(0.12))
-                        .cornerRadius(6)
+                        .pickerStyle(.menu)
                     }
 
-                    // Unsupported System Locale Notice (e.g. Persian)
-                    if SpeechTranscriptionService.isPersianOrUnsupportedLocale() {
+                    if manager.settings.transcriptionEngine == .whisper {
                         HStack(alignment: .top, spacing: 6) {
-                            Image(systemName: "info.circle.fill")
-                                .foregroundColor(.orange)
+                            Image(systemName: "sparkles")
+                                .foregroundColor(.purple)
                                 .font(.caption)
-                            Text("Note: Persian (Farsi) is not natively supported by Apple's Speech Framework. Please select the primary meeting language spoken (e.g. English, German, French, etc.).")
+                            Text("WhisperKit runs directly on Apple Silicon Neural Engine offline. Natively transcribes Persian (Farsi), English, German, and 99+ languages.")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
                         .padding(8)
-                        .background(Color.orange.opacity(0.12))
+                        .background(Color.purple.opacity(0.12))
                         .cornerRadius(6)
+
+                        HStack {
+                            Text("Whisper Model:")
+                                .font(.caption.bold())
+                                .frame(width: 140, alignment: .leading)
+
+                            Picker("", selection: $manager.settings.whisperModel) {
+                                Text("Base (~140MB - Balanced & Accurate)").tag("openai_whisper-base")
+                                Text("Tiny (~75MB - Fastest)").tag("openai_whisper-tiny")
+                                Text("Small (~400MB - High Precision)").tag("openai_whisper-small")
+                            }
+                            .pickerStyle(.menu)
+                        }
+                    } else {
+                        // Speech Recognition Permission Check (Apple Engine only)
+                        if !manager.permissionManager.hasSpeechRecognitionPermission {
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.yellow)
+                                    .font(.caption)
+                                Text("Speech Recognition permission required.")
+                                    .font(.caption2.bold())
+                                Spacer()
+                                Button("Authorize") {
+                                    manager.permissionManager.requestSpeechRecognitionPermission()
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.mini)
+                            }
+                            .padding(6)
+                            .background(Color.yellow.opacity(0.12))
+                            .cornerRadius(6)
+                        }
+
+                        // Unsupported System Locale Notice (e.g. Persian)
+                        if SpeechTranscriptionService.isPersianOrUnsupportedLocale() {
+                            HStack(alignment: .top, spacing: 6) {
+                                Image(systemName: "info.circle.fill")
+                                    .foregroundColor(.orange)
+                                    .font(.caption)
+                                Text("Note: Persian (Farsi) is not natively supported by Apple's Speech Framework. Switch to Whisper AI above or select a supported meeting language.")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(8)
+                            .background(Color.orange.opacity(0.12))
+                            .cornerRadius(6)
+                        }
                     }
 
                     // Primary Language Picker

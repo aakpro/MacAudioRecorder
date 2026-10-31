@@ -1,7 +1,40 @@
 import XCTest
+import WhisperKit
 @testable import InternalSoundRecorderCore
 
 final class TranscriptionTests: XCTestCase {
+
+    func testWhisperKitInitialization() async throws {
+        let recommended = WhisperKit.recommendedModels().default
+        print("Recommended WhisperKit model: \(recommended)")
+        XCTAssertFalse(recommended.isEmpty)
+
+        let service = SpeechTranscriptionService()
+        let testAudioURL = URL(fileURLWithPath: "/Users/aakpro/Music/InternalSoundRecordings/SystemRecording_2026-10-31T06-41-09Z.m4a")
+        if FileManager.default.fileExists(atPath: testAudioURL.path) {
+            let result = try await service.transcribe(
+                audioURL: testAudioURL,
+                engine: .whisper,
+                primaryLocaleID: "fa",
+                whisperModel: "openai_whisper-tiny"
+            )
+            print("Whisper fullText count: \(result.fullText.count), segments: \(result.segments.count)")
+            XCTAssertFalse(result.fullText.isEmpty)
+            XCTAssertFalse(result.segments.isEmpty)
+
+            let markers = [
+                MarkerItem(timestamp: 18.82, label: "Marker #1"),
+                MarkerItem(timestamp: 73.82, label: "Marker #2"),
+                MarkerItem(timestamp: 78.82, label: "Marker #3")
+            ]
+            try service.exportCompanionArtifacts(
+                for: testAudioURL,
+                result: result,
+                markers: markers,
+                audioDuration: 733.0
+            )
+        }
+    }
 
     func testTranscriptionResultSRTFormatting() {
         let segments = [

@@ -33,7 +33,7 @@ public struct MenuBarContentView: View {
             }
 
             // Permission Warning if missing
-            if !manager.permissionManager.hasScreenCapturePermission || (!manager.permissionManager.hasSpeechRecognitionPermission && manager.settings.autoTranscribe) {
+            if !manager.permissionManager.hasScreenCapturePermission || (!manager.permissionManager.hasSpeechRecognitionPermission && manager.settings.autoTranscribe && manager.settings.transcriptionEngine == .apple) {
                 PermissionBannerView(permissionManager: manager.permissionManager)
             }
 

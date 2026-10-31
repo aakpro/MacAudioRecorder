@@ -68,6 +68,18 @@ public enum CaptureTargetMode: String, Codable, CaseIterable, Identifiable, Send
     }
 }
 
+public enum TranscriptionEngine: String, CaseIterable, Codable, Sendable {
+    case whisper = "whisper"
+    case apple = "apple"
+
+    public var displayName: String {
+        switch self {
+        case .whisper: return "Whisper AI (Neural Engine / Multilingual & Persian)"
+        case .apple: return "Apple Speech (System)"
+        }
+    }
+}
+
 public struct RecordingSettings: Codable, Sendable {
     public var saveDirectory: URL
     public var audioFormat: AudioFormat
@@ -82,6 +94,8 @@ public struct RecordingSettings: Codable, Sendable {
     public var targetMode: CaptureTargetMode
     public var targetAppBundleIDs: [String]
     public var autoTranscribe: Bool
+    public var transcriptionEngine: TranscriptionEngine
+    public var whisperModel: String
     public var transcriptionPrimaryLocale: String
     public var transcriptionSecondaryLocale: String?
     public var preferOnDeviceRecognition: Bool
@@ -100,6 +114,8 @@ public struct RecordingSettings: Codable, Sendable {
         targetMode: CaptureTargetMode = .allSystem,
         targetAppBundleIDs: [String] = [],
         autoTranscribe: Bool = true,
+        transcriptionEngine: TranscriptionEngine = .whisper,
+        whisperModel: String = "openai_whisper-base",
         transcriptionPrimaryLocale: String = "auto",
         transcriptionSecondaryLocale: String? = nil,
         preferOnDeviceRecognition: Bool = true
@@ -123,6 +139,8 @@ public struct RecordingSettings: Codable, Sendable {
         self.targetMode = targetMode
         self.targetAppBundleIDs = targetAppBundleIDs
         self.autoTranscribe = autoTranscribe
+        self.transcriptionEngine = transcriptionEngine
+        self.whisperModel = whisperModel
         self.transcriptionPrimaryLocale = transcriptionPrimaryLocale
         self.transcriptionSecondaryLocale = transcriptionSecondaryLocale
         self.preferOnDeviceRecognition = preferOnDeviceRecognition

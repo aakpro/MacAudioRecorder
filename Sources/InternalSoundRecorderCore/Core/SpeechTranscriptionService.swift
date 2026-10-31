@@ -1,6 +1,7 @@
 import Foundation
 @preconcurrency import Speech
 import AVFoundation
+@preconcurrency import WhisperKit
 
 private final class RecognitionContext: @unchecked Sendable {
     private let lock = NSLock()
@@ -134,11 +135,142 @@ public final class SpeechTranscriptionService: @unchecked Sendable {
         SFSpeechRecognizer.authorizationStatus() == .authorized
     }
 
+    // MARK: - WhisperKit Engine
+
+    private final class WhisperCache: @unchecked Sendable {
+        static let shared = WhisperCache()
+        private let queue = DispatchQueue(label: "com.internalsoundrecorder.whispercache")
+        private var kit: WhisperKit?
+        private var model: String?
+
+        func getExisting(model: String) -> WhisperKit? {
+            queue.sync {
+                if let existing = kit, self.model == model {
+                    return existing
+                }
+                return nil
+            }
+        }
+
+        func store(kit: WhisperKit, model: String) {
+            queue.sync {
+                self.kit = kit
+                self.model = model
+            }
+        }
+    }
+
+    public static func getWhisperKit(model: String = "openai_whisper-base") async throws -> WhisperKit {
+        if let existing = WhisperCache.shared.getExisting(model: model) {
+            return existing
+        }
+        let pipe = try await WhisperKit(model: model)
+        WhisperCache.shared.store(kit: pipe, model: model)
+        return pipe
+    }
+
+    public func transcribeWithWhisper(
+        audioURL: URL,
+        model: String = "openai_whisper-base",
+        targetLanguage: String? = nil
+    ) async throws -> TranscriptionResult {
+        guard FileManager.default.fileExists(atPath: audioURL.path) else {
+            throw TranscriptionError.fileNotFound(audioURL)
+        }
+
+        let pipe = try await Self.getWhisperKit(model: model)
+        var decodeOptions = DecodingOptions()
+        if let lang = targetLanguage, !lang.isEmpty, lang != "auto" {
+            decodeOptions.language = lang.components(separatedBy: "-").first ?? lang
+        } else if Self.isPersianOrUnsupportedLocale() {
+            decodeOptions.language = "fa"
+        } else {
+            decodeOptions.detectLanguage = true
+        }
+        decodeOptions.skipSpecialTokens = true
+        decodeOptions.wordTimestamps = true
+
+        let results = try await pipe.transcribe(audioPath: audioURL.path, decodeOptions: decodeOptions)
+        var fullTextParts: [String] = []
+        var allSegments: [TranscriptSegment] = []
+        var languages = Set<String>()
+
+        for res in results {
+            let cleanedResText = res.text.replacingOccurrences(of: "<\\|.*?\\|>", with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !cleanedResText.isEmpty {
+                fullTextParts.append(cleanedResText)
+            }
+            if !res.language.isEmpty {
+                languages.insert(res.language)
+            }
+            for seg in res.segments {
+                let cleanedSeg = seg.text.replacingOccurrences(of: "<\\|.*?\\|>", with: "", options: .regularExpression)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !cleanedSeg.isEmpty else { continue }
+                let duration = max(0.1, Double(seg.end - seg.start))
+                allSegments.append(
+                    TranscriptSegment(
+                        timestamp: Double(seg.start),
+                        duration: duration,
+                        text: cleanedSeg,
+                        confidence: 1.0 - seg.noSpeechProb,
+                        languageCode: res.language
+                    )
+                )
+            }
+        }
+
+        return TranscriptionResult(
+            fullText: fullTextParts.joined(separator: "\n\n"),
+            segments: allSegments,
+            detectedLanguages: Array(languages)
+        )
+    }
+
     // MARK: - Core Transcription Engine
 
     /// Transcribes an audio file into timestamped phrases, sentences, and structured notes.
-    /// Handles multiple languages, on-device fallback, and silent recordings gracefully.
+    /// Supports Whisper AI (Neural Engine / Persian & Multilingual) and Apple Speech with graceful fallback.
     public func transcribe(
+        audioURL: URL,
+        engine: TranscriptionEngine = .whisper,
+        primaryLocaleID: String = "auto",
+        secondaryLocaleID: String? = nil,
+        preferOnDevice: Bool = true,
+        whisperModel: String = "openai_whisper-base"
+    ) async throws -> TranscriptionResult {
+        guard FileManager.default.fileExists(atPath: audioURL.path) else {
+            throw TranscriptionError.fileNotFound(audioURL)
+        }
+
+        if engine == .whisper {
+            do {
+                return try await transcribeWithWhisper(
+                    audioURL: audioURL,
+                    model: whisperModel,
+                    targetLanguage: primaryLocaleID
+                )
+            } catch {
+                // If WhisperKit encounters an issue, fallback to Apple Speech
+                return try await transcribeWithAppleSpeech(
+                    audioURL: audioURL,
+                    primaryLocaleID: primaryLocaleID,
+                    secondaryLocaleID: secondaryLocaleID,
+                    preferOnDevice: preferOnDevice
+                )
+            }
+        } else {
+            return try await transcribeWithAppleSpeech(
+                audioURL: audioURL,
+                primaryLocaleID: primaryLocaleID,
+                secondaryLocaleID: secondaryLocaleID,
+                preferOnDevice: preferOnDevice
+            )
+        }
+    }
+
+    public func transcribeWithAppleSpeech(
         audioURL: URL,
         primaryLocaleID: String = "auto",
         secondaryLocaleID: String? = nil,
